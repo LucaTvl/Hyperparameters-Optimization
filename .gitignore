@@ -1,0 +1,33 @@
+# Modelos entrenados
+Salidas/modelos/*.pt
+
+# Datasets
+tmp/
+CSV/
+
+# Python
+__pycache__/
+*.py[cod]
+*.so
+.venv/
+venv/
+env/
+*.egg-info/
+dist/
+build/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Otros
+*.log
+.ipynb_checkpoints/
+.pytest_cache/
+*.egg
