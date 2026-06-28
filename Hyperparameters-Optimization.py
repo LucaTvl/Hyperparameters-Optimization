@@ -30,6 +30,8 @@ import numpy as np
 import pandas as pd
 import torch
 import torch.nn as nn
+import matplotlib
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from scipy import stats
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -286,10 +288,23 @@ Separamos el dataset en:
 
 import os
 
+import datetime
+
 # ── Crear carpeta de salidas ──────────────────────────────────
 SALIDAS = os.path.join(SCRIPT_DIR, 'Salidas')
 os.makedirs(SALIDAS, exist_ok=True)
+
+# ── Crear carpeta única para gráficos ─────────────────────────
+timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+GRAFICOS_DIR_BASE = os.path.join(SALIDAS, f'graficos_{timestamp}')
+GRAFICOS_DIR = GRAFICOS_DIR_BASE
+contador = 1
+while os.path.exists(GRAFICOS_DIR):
+    GRAFICOS_DIR = f"{GRAFICOS_DIR_BASE}_{contador}"
+    contador += 1
+os.makedirs(GRAFICOS_DIR, exist_ok=True)
 print(f'✓ Carpeta de salidas: {SALIDAS}')
+print(f'✓ Carpeta de gráficos: {GRAFICOS_DIR}')
 
 ZCP_COLS  = ['grad_norm', 'snip', 'grasp', 'jacob_cov', 'synflow', 'params_k']
 
@@ -552,8 +567,8 @@ axes[1].set_title('Convergencia GA Nivel 1\n(media ± std de 10 corridas)')
 axes[1].legend(fontsize=9)
 
 plt.tight_layout()
-plt.savefig(f'{SALIDAS}/ga_nivel1_comparacion.png', dpi=120, bbox_inches='tight')
-plt.show()
+plt.savefig(f'{GRAFICOS_DIR}/ga_nivel1_comparacion.png', dpi=120, bbox_inches='tight')
+plt.close(fig)
 
 """## Bloque 6 — GA Nivel 2: búsqueda arquitectural con proxy calibrado
 
@@ -816,8 +831,8 @@ axes[1].set_title('Accuracy real de la mejor arq.\npor generación')
 axes[1].legend(fontsize=9)
 
 plt.tight_layout()
-plt.savefig(f'{SALIDAS}/ga_nivel2_convergencia.png', dpi=120, bbox_inches='tight')
-plt.show()
+plt.savefig(f'{GRAFICOS_DIR}/ga_nivel2_convergencia.png', dpi=120, bbox_inches='tight')
+plt.close(fig)
 
 """## Bloque 7 — NSGA-II: búsqueda multi-objetivo (accuracy vs eficiencia)
 
@@ -1077,8 +1092,8 @@ lines2, labels2 = ax2b.get_legend_handles_labels()
 ax2.legend(lines1+lines2, labels1+labels2, fontsize=9)
 
 plt.tight_layout()
-plt.savefig(f'{SALIDAS}/nsga2_pareto.png', dpi=120, bbox_inches='tight')
-plt.show()
+plt.savefig(f'{GRAFICOS_DIR}/nsga2_pareto.png', dpi=120, bbox_inches='tight')
+plt.close(fig)
 
 # ── Tabla del frente NSGA-II ──────────────────────────────────
 print('\n─── Frente de Pareto NSGA-II (ordenado por params_k) ───')
@@ -1447,7 +1462,7 @@ Para comparación justa con el benchmark:
 **Referencia:** mejor arquitectura del benchmark = 91.68% (channel=16, nc=5)
 
 **Estrategia de 2 fases:**
-1. Entrenar todas con 50 épocas → filtrar las 2 mejores
+1. Entrenar las 5 candidatas con 50 épocas → filtrar las 2 mejores
 2. Entrenar las 2 mejores con 200 épocas completas → resultado final
 """
 
@@ -1520,15 +1535,15 @@ def train_network(arch_str, C, num_cells, n_epochs=50, lr=0.025):
 
     return max(history), history, net
 
-# ── Fase 1: entrenar top-2 por 50 épocas ─────────────────────
+# ── Fase 1: entrenar top-5 por 50 épocas ─────────────────────
 print('═'*60)
-print('FASE 1: Top-2 candidatas × 50 épocas')
+print('FASE 1: Top-5 candidatas × 50 épocas')
 print('═'*60)
 
-top2_candidates = df_pareto_ext.nlargest(2, 'proxy_score')
+top5_candidates = df_pareto_ext.nlargest(5, 'proxy_score')
 phase1_results  = []
 
-for _, row in top2_candidates.iterrows():
+for _, row in top5_candidates.iterrows():
     astr = row['arch_str']
     C    = int(row['channel'])
     nc   = int(row['num_cells'])
@@ -1548,22 +1563,22 @@ print('\n─── Resumen Fase 1 ───────────────�
 print(phase1_df[['channel','num_cells','params_k',
                  'proxy','acc_50ep']].to_string(index=False))
 
-# ── Fase 2: la mejor por 100 épocas ─────────────────────────────
+# ── Fase 2: las 2 mejores por 200 épocas ─────────────────────────────
 print('\n' + '═'*60)
-print('FASE 2: La mejor por acc_50ep × 100 épocas completas')
+print('FASE 2: Las 2 mejores por acc_50ep × 200 épocas completas')
 print('═'*60)
 BENCHMARK_BEST = 91.68   # referencia
 
-top1 = sorted(phase1_results, key=lambda r: r['acc_50ep'], reverse=True)[:1]
+top2 = sorted(phase1_results, key=lambda r: r['acc_50ep'], reverse=True)[:2]
 final_results = []
 
-for r in top1:
+for r in top2:
     astr = r['arch_str']
     C, nc = r['channel'], r['num_cells']
     print(f'\n▶ channel={C}, nc={nc}, params={r["params_k"]:.1f}K')
-    best_acc, hist, net = train_network(astr, C, nc, n_epochs=100)
-    final_results.append({**r, 'acc_100ep': best_acc, 'history_100': hist})
-    print(f'  → Mejor acc (100 ep): {best_acc:.4f}%')
+    best_acc, hist, net = train_network(astr, C, nc, n_epochs=200)
+    final_results.append({**r, 'acc_200ep': best_acc, 'history_200': hist})
+    print(f'  → Mejor acc (200 ep): {best_acc:.4f}%')
     print(f'  → Benchmark best    : {BENCHMARK_BEST:.4f}%')
     delta = best_acc - BENCHMARK_BEST
     symbol = '✓ SUPERA' if delta > 0 else '✗ No supera'
@@ -1574,21 +1589,21 @@ os.makedirs(f'{SALIDAS}/modelos', exist_ok=True)
 for r in final_results:
     fname = (f'{SALIDAS}/modelos/'
              f'C{r["channel"]}_nc{r["num_cells"]}_'
-             f'acc{r["acc_100ep"]:.2f}.pt')
+             f'acc{r["acc_200ep"]:.2f}.pt')
     # Solo guardamos los resultados, no el modelo completo
     torch.save({'arch_str': r['arch_str'],
                 'channel' : r['channel'],
                 'num_cells': r['num_cells'],
-                'acc_100ep': r['acc_100ep'],
-                'history_100': r['history_100']}, fname)
+                'acc_200ep': r['acc_200ep'],
+                'history_200': r['history_200']}, fname)
     print(f'✓ Guardado: {fname}')
 
 fig, axes = plt.subplots(1, 2, figsize=(14, 5))
 
-# ── Curvas de entrenamiento (100 ep) ─────────────────────────
+# ── Curvas de entrenamiento (200 ep) ─────────────────────────
 colors = ['steelblue', 'darkorange']
 for i, r in enumerate(final_results):
-    axes[0].plot(r['history_100'], color=colors[i], linewidth=2,
+    axes[0].plot(r['history_200'], color=colors[i], linewidth=2,
                  label=f'C={r["channel"]}, nc={r["num_cells"]}, '
                        f'{r["params_k"]:.0f}K params')
 axes[0].axhline(BENCHMARK_BEST, color='red', linestyle='--',
@@ -1607,7 +1622,7 @@ for r in final_results:
     axes[1].scatter(r['params_k'], r['proxy'],
                     c='gold', s=200, zorder=5,
                     edgecolors='black', linewidths=2)
-    axes[1].annotate(f'{r["acc_100ep"]:.2f}%',
+    axes[1].annotate(f'{r["acc_200ep"]:.2f}%',
                      (r['params_k'], r['proxy']),
                      textcoords='offset points',
                      xytext=(5,5), fontsize=9, color='red', fontweight='bold')
@@ -1617,8 +1632,8 @@ axes[1].set_title('Frente de Pareto extendido\n(oro = entrenadas, etiqueta = acc
 axes[1].legend(fontsize=9)
 
 plt.tight_layout()
-plt.savefig(f'{SALIDAS}/resultados_finales.png', dpi=120, bbox_inches='tight')
-plt.show()
+plt.savefig(f'{GRAFICOS_DIR}/resultados_finales.png', dpi=120, bbox_inches='tight')
+plt.close(fig)
 
 # ── Tabla resumen completa del proyecto ───────────────────────
 print('\n' + '═'*70)
@@ -1635,9 +1650,9 @@ print(f'  {"GA N1+GA N2":30s}  '
 print(f'  {"NSGA-II benchmark":30s}  '
       f'{"90.30%":>10}  {"628":>8}  {"1531K":>10}')
 for r in final_results:
-    vs = '✓' if r['acc_100ep'] > BENCHMARK_BEST else '✗'
+    vs = '✓' if r['acc_200ep'] > BENCHMARK_BEST else '✗'
     print(f'  {"NSGA-II ext C="+str(r["channel"])+" nc="+str(r["num_cells"]):30s}  '
-          f'{r["acc_100ep"]:>9.2f}%  '
+          f'{r["acc_200ep"]:>9.2f}%  '
           f'{"N/A":>8}  '
           f'{r["params_k"]:>8.0f}K  {vs}')
 print('═'*70)
