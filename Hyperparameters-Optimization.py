@@ -25,7 +25,7 @@ calibrado por GA para búsqueda arquitectural dentro y fuera de NATS-Bench TSS.
 ## Bloque 1 — Setup
 """
 
-import os, bz2, pickle
+import os, bz2, pickle, time, subprocess, sys, platform
 import numpy as np
 import pandas as pd
 import torch
@@ -306,6 +306,78 @@ os.makedirs(GRAFICOS_DIR, exist_ok=True)
 print(f'✓ Carpeta de salidas: {SALIDAS}')
 print(f'✓ Carpeta de gráficos: {GRAFICOS_DIR}')
 
+# --- INICIO ESCRITURA METADATA ---
+METADATA_FILE = os.path.join(GRAFICOS_DIR, 'metadata.txt')
+try:
+    git_commit = subprocess.check_output(['git', 'rev-parse', '--short', 'HEAD'], stderr=subprocess.STDOUT).decode('utf-8').strip()
+except Exception:
+    git_commit = "No disponible"
+
+metadata_initial = f"""============================================================
+METADATA DE LA EJECUCIÓN
+============================================================
+
+Fecha y hora de inicio: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+Archivo ejecutado: {os.path.abspath(__file__)}
+Commit Git: {git_commit}
+Sistema operativo: {platform.system()} {platform.release()}
+Versión de Python: {sys.version.split()[0]}
+Versión de PyTorch: {torch.__version__}
+CUDA disponible: {torch.cuda.is_available()}
+Versión CUDA informada por PyTorch: {torch.version.cuda if torch.cuda.is_available() else 'No disponible'}
+GPU: {torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'No disponible'}
+Dispositivo utilizado: {DEVICE}
+
+Dataset: {DATASET}
+Ruta del dataset: {CIFAR_DIR}
+Archivo de ground truth: {CSV_GT}
+Archivo de Zero-Cost Proxies: {CSV_ZCP}
+Carpeta de gráficos: {GRAFICOS_DIR}
+
+------------------------------------------------------------
+SEEDS EXISTENTES
+------------------------------------------------------------
+
+GA Nivel 1: Iteración interna con run*17
+GA Nivel 2: 42, 7, 99
+NSGA-II: 42
+Búsqueda extendida: 42
+Entrenamiento de 50 épocas: No definida explícitamente
+Entrenamiento de 200 épocas: No definida explícitamente
+
+Nota: las seeds fueron únicamente registradas. No se
+modificaron ni se aplicaron nuevamente.
+
+------------------------------------------------------------
+CONFIGURACIÓN
+------------------------------------------------------------
+
+GA Nivel 1:
+- Tamaño de población: 20
+- Cantidad de generaciones: 5
+- Probabilidad de cruce: 0.8
+- Probabilidad de mutación: 0.3
+
+GA Nivel 2:
+- Tamaño de población: 50
+- Cantidad de generaciones: 30
+- Probabilidad de cruce: 0.8
+- Probabilidad de mutación: 0.2
+
+NSGA-II:
+- Tamaño de población: 80
+- Cantidad de generaciones: 40
+- Objetivos: Maximizar proxy_ga, Minimizar params_k
+
+Entrenamiento final:
+- Fase 1: 5 arquitecturas x 50 épocas
+- Fase 2: 2 arquitecturas x 200 épocas
+"""
+with open(METADATA_FILE, 'w', encoding='utf-8') as f:
+    f.write(metadata_initial)
+start_time_total = time.perf_counter()
+# --- FIN ESCRITURA METADATA ---
+
 ZCP_COLS  = ['grad_norm', 'snip', 'grasp', 'jacob_cov', 'synflow', 'params_k']
 
 # ── Agregar params_k al dataset de ZCPs ───────────────────────
@@ -480,6 +552,15 @@ print(f'\n─── Pesos óptimos del GA ────────────�
 for col, w in best_weights_ga.items():
     bar = '█' * int(abs(w)*20)
     print(f'  {col:12s}: {w:+.4f}  {"+" if w>=0 else "-"}{bar}')
+
+with open(METADATA_FILE, 'a', encoding='utf-8') as f:
+    f.write(f"\n------------------------------------------------------------\n")
+    f.write(f"RESULTADOS GA NIVEL 1\n")
+    f.write(f"------------------------------------------------------------\n\n")
+    f.write(f"Mejor fitness: {best_run['best_p50']:.4f}\n")
+    f.write(f"Pesos de los Zero-Cost Proxies:\n")
+    for k, v in best_weights_ga.items():
+        f.write(f"- {k}: {v:.4f}\n")
 
 """### Comparación GA vs BO vs RS — mismo presupuesto (100 evaluaciones)"""
 
@@ -750,6 +831,22 @@ for seed in [42, 7, 99]:
     print(f'  seed={seed}: acc={best_info.get("acc_valid","?"):.4f}%  '
           f'rank={int(best_info.get("rank_real","?"))}  '
           f'evals={n_ev}')
+
+best_ga2 = max(results_ga2, key=lambda r: r['history'][-1]['best_fit'])
+mejor_fit_ga2 = best_ga2['history'][-1]['best_fit']
+acc_ga2 = best_ga2['best_info'].get('acc_valid', '?')
+param_ga2 = best_ga2['best_info'].get('params_k', '?')
+match_ga2 = df_full[(df_full['acc_valid'] == acc_ga2) & (df_full['params_k'] == param_ga2)]
+arch_str_ga2 = match_ga2['arch_str'].values[0] if len(match_ga2) > 0 else "Desconocida"
+
+with open(METADATA_FILE, 'a', encoding='utf-8') as f:
+    f.write(f"\n------------------------------------------------------------\n")
+    f.write(f"RESULTADOS GA NIVEL 2\n")
+    f.write(f"------------------------------------------------------------\n\n")
+    f.write(f"Mejor fitness: {mejor_fit_ga2:.4f}\n")
+    f.write(f"Mejor arquitectura: {arch_str_ga2}\n")
+    f.write(f"Accuracy del benchmark: {acc_ga2}\n")
+    f.write(f"Cantidad de parámetros: {param_ga2}\n")
 
 print('\nEjecutando RS Nivel 2...')
 rs_f, rs_info, rs_hist = run_rs_level2(n_evals=1500, seed=42)
@@ -1038,6 +1135,13 @@ df_pareto_nsga2, hist_fronts, n_ev_nsga2 = run_nsga2(
 )
 print(f'✓ NSGA-II: {len(df_pareto_nsga2)} soluciones en el frente  '
       f'({n_ev_nsga2} evals)')
+
+with open(METADATA_FILE, 'a', encoding='utf-8') as f:
+    f.write(f"\n------------------------------------------------------------\n")
+    f.write(f"RESULTADOS NSGA-II\n")
+    f.write(f"------------------------------------------------------------\n\n")
+    f.write(f"Cantidad de soluciones del frente de Pareto: {len(df_pareto_nsga2)}\n")
+    f.write(f"Cantidad de evaluaciones: {n_ev_nsga2}\n")
 
 print('\nComputando frente de Pareto RS...')
 df_pareto_rs = rs_pareto(n_evals=n_ev_nsga2, seed=42)
@@ -1563,6 +1667,18 @@ print('\n─── Resumen Fase 1 ───────────────�
 print(phase1_df[['channel','num_cells','params_k',
                  'proxy','acc_50ep']].to_string(index=False))
 
+with open(METADATA_FILE, 'a', encoding='utf-8') as f:
+    f.write(f"\n------------------------------------------------------------\n")
+    f.write(f"FASE 1: 5 ARQUITECTURAS X 50 ÉPOCAS\n")
+    f.write(f"------------------------------------------------------------\n\n")
+    for i, r in enumerate(phase1_results, 1):
+        f.write(f"Arquitectura {i}:\n")
+        f.write(f"- arch_str: {r['arch_str']}\n")
+        f.write(f"- channels: {r['channel']}\n")
+        f.write(f"- num_cells: {r['num_cells']}\n")
+        f.write(f"- parámetros: {r['params_k']}\n")
+        f.write(f"- acc_50ep: {r['acc_50ep']}\n")
+
 # ── Fase 2: las 2 mejores por 200 épocas ─────────────────────────────
 print('\n' + '═'*60)
 print('FASE 2: Las 2 mejores por acc_50ep × 200 épocas completas')
@@ -1597,6 +1713,27 @@ for r in final_results:
                 'acc_200ep': r['acc_200ep'],
                 'history_200': r['history_200']}, fname)
     print(f'✓ Guardado: {fname}')
+
+with open(METADATA_FILE, 'a', encoding='utf-8') as f:
+    f.write(f"\n------------------------------------------------------------\n")
+    f.write(f"FASE 2: 2 ARQUITECTURAS X 200 ÉPOCAS\n")
+    f.write(f"------------------------------------------------------------\n\n")
+    for i, r in enumerate(final_results, 1):
+        f.write(f"Arquitectura final {i}:\n")
+        f.write(f"- arch_str: {r['arch_str']}\n")
+        f.write(f"- channels: {r['channel']}\n")
+        f.write(f"- num_cells: {r['num_cells']}\n")
+        f.write(f"- parámetros: {r['params_k']}\n")
+        f.write(f"- mejor accuracy: {r['acc_200ep']}\n")
+        f.write(f"- accuracy de la época 200: {r['history_200'][-1]}\n")
+        f.write(f"- época de la mejor accuracy: {int(np.argmax(r['history_200'])) + 1}\n")
+        fname_short = f'C{r["channel"]}_nc{r["num_cells"]}_acc{r["acc_200ep"]:.2f}.pt'
+        f.write(f"- modelo guardado: {fname_short}\n\n")
+
+    end_time_total = time.perf_counter()
+    total_time = end_time_total - start_time_total
+    f.write(f"Fecha y hora de finalización: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+    f.write(f"Tiempo total de ejecución: {total_time:.2f} segundos\n")
 
 fig, axes = plt.subplots(1, 2, figsize=(14, 5))
 

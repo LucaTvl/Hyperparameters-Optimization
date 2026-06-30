@@ -1,0 +1,150 @@
+============================================================
+METADATA DE LA EJECUCIÓN
+============================================================
+
+Fecha y hora de inicio: 2026-06-29 20:29:40
+Archivo ejecutado: c:\Users\Franco Zariaga\Documents\Hyperparameters-Optimization\Hyperparameters-Optimization.py
+Commit Git: cc52bc0
+Sistema operativo: Windows 11
+Versión de Python: 3.13.2
+Versión de PyTorch: 2.12.1+cu126
+CUDA disponible: True
+Versión CUDA informada por PyTorch: 12.6
+GPU: NVIDIA GeForce GTX 1070
+Dispositivo utilizado: cuda
+
+Dataset: cifar10-valid
+Ruta del dataset: c:\Users\Franco Zariaga\Documents\Hyperparameters-Optimization\tmp\cifar10
+Archivo de ground truth: c:\Users\Franco Zariaga\Documents\Hyperparameters-Optimization\CSV\nats_ground_truth.csv
+Archivo de Zero-Cost Proxies: c:\Users\Franco Zariaga\Documents\Hyperparameters-Optimization\CSV\nats_zcps.csv
+Carpeta de gráficos: c:\Users\Franco Zariaga\Documents\Hyperparameters-Optimization\Salidas\graficos_20260629_202940
+
+------------------------------------------------------------
+SEEDS EXISTENTES
+------------------------------------------------------------
+
+GA Nivel 1: Iteración interna con run*17
+GA Nivel 2: 42, 7, 99
+NSGA-II: 42
+Búsqueda extendida: 42
+Entrenamiento de 50 épocas: No definida explícitamente
+Entrenamiento de 200 épocas: No definida explícitamente
+
+Nota: las seeds fueron únicamente registradas. No se
+modificaron ni se aplicaron nuevamente.
+
+------------------------------------------------------------
+CONFIGURACIÓN
+------------------------------------------------------------
+
+GA Nivel 1:
+- Tamaño de población: 20
+- Cantidad de generaciones: 5
+- Probabilidad de cruce: 0.8
+- Probabilidad de mutación: 0.3
+
+GA Nivel 2:
+- Tamaño de población: 50
+- Cantidad de generaciones: 30
+- Probabilidad de cruce: 0.8
+- Probabilidad de mutación: 0.2
+
+NSGA-II:
+- Tamaño de población: 80
+- Cantidad de generaciones: 40
+- Objetivos: Maximizar proxy_ga, Minimizar params_k
+
+Entrenamiento final:
+- Fase 1: 5 arquitecturas x 50 épocas
+- Fase 2: 2 arquitecturas x 200 épocas
+
+------------------------------------------------------------
+RESULTADOS GA NIVEL 1
+------------------------------------------------------------
+
+Mejor fitness: 0.7000
+Pesos de los Zero-Cost Proxies:
+- grad_norm: -0.6682
+- snip: 0.6033
+- grasp: 0.7993
+- jacob_cov: 0.4384
+- synflow: 0.1609
+- params_k: 0.2904
+
+------------------------------------------------------------
+RESULTADOS GA NIVEL 2
+------------------------------------------------------------
+
+Mejor fitness: 1.5118
+Mejor arquitectura: |nor_conv_3x3~0|+|nor_conv_3x3~0|nor_conv_3x3~1|+|nor_conv_3x3~0|nor_conv_3x3~1|nor_conv_3x3~2|
+Accuracy del benchmark: 90.29999999023435
+Cantidad de parámetros: 1531.55
+
+------------------------------------------------------------
+RESULTADOS NSGA-II
+------------------------------------------------------------
+
+Cantidad de soluciones del frente de Pareto: 80
+Cantidad de evaluaciones: 1680
+
+------------------------------------------------------------
+FASE 1: 5 ARQUITECTURAS X 50 ÉPOCAS
+------------------------------------------------------------
+
+Arquitectura 1:
+- arch_str: |nor_conv_3x3~0|+|nor_conv_3x3~0|nor_conv_3x3~1|+|nor_conv_3x3~0|nor_conv_3x3~1|none~2|
+- channels: 64
+- num_cells: 9
+- parámetros: 1667.274
+- acc_50ep: 91.95
+Arquitectura 2:
+- arch_str: |none~0|+|nor_conv_3x3~0|nor_conv_3x3~1|+|nor_conv_3x3~0|nor_conv_3x3~1|none~2|
+- channels: 64
+- num_cells: 9
+- parámetros: 1334.346
+- acc_50ep: 90.72
+Arquitectura 3:
+- arch_str: |nor_conv_3x3~0|+|nor_conv_3x3~0|nor_conv_3x3~1|+|none~0|nor_conv_3x3~1|none~2|
+- channels: 64
+- num_cells: 7
+- parámetros: 1038.41
+- acc_50ep: 91.35
+Arquitectura 4:
+- arch_str: |nor_conv_3x3~0|+|nor_conv_3x3~0|nor_conv_3x3~1|+|none~0|skip_connect~1|none~2|
+- channels: 64
+- num_cells: 9
+- parámetros: 1001.418
+- acc_50ep: 90.46
+Arquitectura 5:
+- arch_str: |skip_connect~0|+|nor_conv_3x3~0|nor_conv_3x3~1|+|none~0|nor_conv_1x1~1|none~2|
+- channels: 64
+- num_cells: 9
+- parámetros: 714.954
+- acc_50ep: 71.7
+
+------------------------------------------------------------
+FASE 2: 2 ARQUITECTURAS X 200 ÉPOCAS
+------------------------------------------------------------
+
+Arquitectura final 1:
+- arch_str: |nor_conv_3x3~0|+|nor_conv_3x3~0|nor_conv_3x3~1|+|nor_conv_3x3~0|nor_conv_3x3~1|none~2|
+- channels: 64
+- num_cells: 9
+- parámetros: 1667.274
+- mejor accuracy: 94.18
+- accuracy de la época 200: 94.16
+- época de la mejor accuracy: 184
+- modelo guardado: C64_nc9_acc94.18.pt
+
+Arquitectura final 2:
+- arch_str: |nor_conv_3x3~0|+|nor_conv_3x3~0|nor_conv_3x3~1|+|none~0|nor_conv_3x3~1|none~2|
+- channels: 64
+- num_cells: 7
+- parámetros: 1038.41
+- mejor accuracy: 93.12
+- accuracy de la época 200: 93.03
+- época de la mejor accuracy: 187
+- modelo guardado: C64_nc7_acc93.12.pt
+
+Fecha y hora de finalización: 2026-06-30 06:45:10
+Tiempo total de ejecución: 36914.42 segundos
