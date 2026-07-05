@@ -25,7 +25,7 @@ calibrado por GA para búsqueda arquitectural dentro y fuera de NATS-Bench TSS.
 ## Bloque 1 — Setup
 """
 
-import os, bz2, pickle, time, subprocess, sys, platform
+import os, bz2, pickle, time, subprocess, sys, platform, random
 import numpy as np
 import pandas as pd
 import torch
@@ -49,7 +49,13 @@ CSV_ZCP    = os.path.join(BASE_DIR, 'nats_zcps.csv')
 CSV_ZCP_FULL = os.path.join(BASE_DIR, 'nats_zcps_full.csv')
 CIFAR_DIR  = os.path.join(SCRIPT_DIR, 'tmp', 'cifar10')
 
-DATASET, SEED, BUDGET = 'cifar10-valid', 777, '200'
+DATASET, BUDGET = 'cifar10-valid', '200'
+
+# ── Semilla maestra aleatoria (reproducible) ─────────────────
+# Generada una sola vez por ejecución; todas las sub-semillas se
+# derivan de ella para garantizar reproducibilidad del experimento.
+MASTER_SEED = random.randint(0, 2**31 - 1)
+print(f'✓ Semilla maestra: {MASTER_SEED}')
 DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
 print(f'✓ Device : {DEVICE}')
 
@@ -338,15 +344,17 @@ Carpeta de gráficos: {GRAFICOS_DIR}
 SEEDS EXISTENTES
 ------------------------------------------------------------
 
-GA Nivel 1: Iteración interna con run*17
-GA Nivel 2: 42, 7, 99
-NSGA-II: 42
-Búsqueda extendida: 42
-Entrenamiento de 50 épocas: No definida explícitamente
-Entrenamiento de 200 épocas: No definida explícitamente
+MASTER_SEED: {MASTER_SEED}
 
-Nota: las seeds fueron únicamente registradas. No se
-modificaron ni se aplicaron nuevamente.
+Seeds derivadas (todas reproducibles a partir de MASTER_SEED):
+  GA Nivel 1 (run 0-9): MASTER_SEED + run*17
+  RS Nivel 1 (run 0-9): MASTER_SEED + run*31 + 100
+  ZCPs espacio extendido: MASTER_SEED + 300
+  GA Nivel 2 (3 corridas): MASTER_SEED + 400, +407, +499
+  RS Nivel 2: MASTER_SEED + 500
+  NSGA-II benchmark: MASTER_SEED + 600
+  RS multi-objetivo: MASTER_SEED + 600
+  NSGA-II extendido: MASTER_SEED + 700
 
 ------------------------------------------------------------
 CONFIGURACIÓN
@@ -450,7 +458,6 @@ calibración. Cada individuo es un vector de 6 reales (uno por ZCP).
 - 10 corridas independientes para medir estabilidad
 """
 
-import random
 import time
 
 # ── GA Nivel 1: pesos continuos ───────────────────────────────
@@ -529,7 +536,7 @@ t0 = time.time()
 
 for run in range(N_RUNS):
     best_w, best_p, hist = run_ga_level1(
-        pop_size=20, n_gen=5, seed=run*17
+        pop_size=20, n_gen=5, seed=MASTER_SEED + run*17
     )
     results_ga1.append({
         'run': run, 'best_p50': best_p,
@@ -569,7 +576,7 @@ print('Ejecutando RS para pesos — 10 corridas...\n')
 results_rs1 = []
 
 for run in range(N_RUNS):
-    random.seed(run*31 + 100)
+    random.seed(MASTER_SEED + run*31 + 100)
     candidates = [random_weights() for _ in range(100)]
     fits_rs    = [fitness_weights(c, k=50) for c in candidates]
     best_idx   = np.argmax(fits_rs)
@@ -823,7 +830,7 @@ def greedy_search(k_consult: int) -> dict:
 # ── Ejecutar todos los métodos ────────────────────────────────
 print('Ejecutando GA Nivel 2 (3 corridas)...')
 results_ga2 = []
-for seed in [42, 7, 99]:
+for seed in [MASTER_SEED + 400, MASTER_SEED + 407, MASTER_SEED + 499]:
     _, best_f, hist, best_info, n_ev = run_ga_level2(
         pop_size=50, n_gen=30, seed=seed)
     results_ga2.append({'seed': seed, 'history': hist,
@@ -849,7 +856,7 @@ with open(METADATA_FILE, 'a', encoding='utf-8') as f:
     f.write(f"Cantidad de parámetros: {param_ga2}\n")
 
 print('\nEjecutando RS Nivel 2...')
-rs_f, rs_info, rs_hist = run_rs_level2(n_evals=1500, seed=42)
+rs_f, rs_info, rs_hist = run_rs_level2(n_evals=1500, seed=MASTER_SEED + 500)
 print(f'  RS: acc={rs_info.get("acc_valid","?"):.4f}%  '\
       f'rank={int(rs_info.get("rank_real","?"))}')
 
@@ -1131,7 +1138,7 @@ def real_pareto(df):
 # ── Ejecutar ──────────────────────────────────────────────────
 print('Ejecutando NSGA-II (pop=80, gen=40)...')
 df_pareto_nsga2, hist_fronts, n_ev_nsga2 = run_nsga2(
-    pop_size=80, n_gen=40, seed=42
+    pop_size=80, n_gen=40, seed=MASTER_SEED + 600
 )
 print(f'✓ NSGA-II: {len(df_pareto_nsga2)} soluciones en el frente  '
       f'({n_ev_nsga2} evals)')
@@ -1144,7 +1151,7 @@ with open(METADATA_FILE, 'a', encoding='utf-8') as f:
     f.write(f"Cantidad de evaluaciones: {n_ev_nsga2}\n")
 
 print('\nComputando frente de Pareto RS...')
-df_pareto_rs = rs_pareto(n_evals=n_ev_nsga2, seed=42)
+df_pareto_rs = rs_pareto(n_evals=n_ev_nsga2, seed=MASTER_SEED + 600)
 print(f'✓ RS Pareto: {len(df_pareto_rs)} soluciones')
 
 print('\nComputando frente de Pareto real (ground truth)...')
@@ -1297,7 +1304,7 @@ else:
           f'{len(CHANNELS)*len(NUM_CELLS)*SAMPLE_PER_GROUP} arquitecturas\n')
 
     rows_ext = []
-    np.random.seed(42)
+    np.random.seed(MASTER_SEED + 300)
     all_arch_strs = df['arch_str'].tolist()
 
     for C, nc in tqdm(list(itertools.product(CHANNELS, NUM_CELLS))):
@@ -1367,7 +1374,7 @@ def fitness_weights_renorm(w, k=50):
 print('\nRe-optimizando GA Nivel 1 con nueva normalización...')
 results_ga1_ext = []
 for run in range(10):
-    random.seed(run * 17)
+    random.seed(MASTER_SEED + run * 17)
     pop  = [random_weights() for _ in range(20)]
     fits = [fitness_weights_renorm(ind) for ind in pop]
 
@@ -1487,7 +1494,7 @@ def crossover_ext(p1, p2):
 print('Ejecutando NSGA-II en espacio extendido...')
 print('(pop=60, gen=30, ~1800+ evaluaciones de proxy)\n')
 
-random.seed(42)
+random.seed(MASTER_SEED + 700)
 pop_ext  = [random_ind_ext() for _ in range(60)]
 scores_ext = [get_objectives_ext(ind) for ind in pop_ext]
 n_evals_ext = 60
