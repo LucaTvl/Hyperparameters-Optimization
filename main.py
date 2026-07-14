@@ -15,7 +15,7 @@ from config.settings import (
     DEVICE, DATASET, CIFAR_DIR, CSV_GT, CSV_ZCP, CSV_ZCP_FULL, CSV_ZCP_EXT,
     MASTER_SEED, ZCP_COLS, ZCP_COLS_WITH_PARAMS, CHANNELS, NUM_CELLS,
     SAMPLE_PER_GROUP, GRAFICOS_DIR, METADATA_FILE, MODELOS_DIR, GIT_COMMIT,
-    START_TIME_TOTAL
+    START_TIME_TOTAL, setup_output_dirs
 )
 
 # Importaciones de datos y métricas
@@ -41,6 +41,7 @@ from utils.visualization import (
 from core.train import train_network
 
 def main():
+    setup_output_dirs()
     print(f'✓ Semilla maestra: {MASTER_SEED}')
     print(f'✓ Device : {DEVICE}')
     

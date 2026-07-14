@@ -35,20 +35,22 @@ OPS_LIST = ['none', 'skip_connect', 'nor_conv_1x1', 'nor_conv_3x3', 'avg_pool_3x
 N_EDGES = 6
 
 # ── Generación de Carpetas de Salida y Timestamps ──
-SALIDAS = os.path.join(SCRIPT_DIR, 'Salidas')
-os.makedirs(SALIDAS, exist_ok=True)
+OUTPUTS = os.path.join(SCRIPT_DIR, 'outputs')
+os.makedirs(OUTPUTS, exist_ok=True)
 
 TIMESTAMP = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-GRAFICOS_DIR_BASE = os.path.join(SALIDAS, f'graficos_{TIMESTAMP}')
+GRAFICOS_DIR_BASE = os.path.join(OUTPUTS, f'graficos_{TIMESTAMP}')
 GRAFICOS_DIR = GRAFICOS_DIR_BASE
 contador = 1
 while os.path.exists(GRAFICOS_DIR):
     GRAFICOS_DIR = f"{GRAFICOS_DIR_BASE}_{contador}"
     contador += 1
-os.makedirs(GRAFICOS_DIR, exist_ok=True)
 
-MODELOS_DIR = os.path.join(SALIDAS, f'modelos_{TIMESTAMP}')
-os.makedirs(MODELOS_DIR, exist_ok=True)
+MODELOS_DIR = os.path.join(OUTPUTS, f'modelos_{TIMESTAMP}')
+
+def setup_output_dirs():
+    os.makedirs(GRAFICOS_DIR, exist_ok=True)
+    os.makedirs(MODELOS_DIR, exist_ok=True)
 
 METADATA_FILE = os.path.join(GRAFICOS_DIR, 'metadata.txt')
 

@@ -1,5 +1,6 @@
-# Modelos entrenados
-Salidas/modelos/*.pt
+# Carpetas de salida
+outputs/
+predictions/
 
 # Datasets
 tmp/
