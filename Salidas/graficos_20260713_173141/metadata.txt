@@ -87,3 +87,65 @@ RESULTADOS NSGA-II
 
 Cantidad de soluciones del frente de Pareto: 80
 Cantidad de evaluaciones: 1680
+
+------------------------------------------------------------
+FASE 1: 5 ARQUITECTURAS X 50 ÉPOCAS
+------------------------------------------------------------
+
+Arquitectura 1:
+- arch_str: |nor_conv_3x3~0|+|nor_conv_3x3~0|nor_conv_3x3~1|+|nor_conv_3x3~0|avg_pool_3x3~1|nor_conv_3x3~2|
+- channels: 64
+- num_cells: 9
+- parámetros: 1667.274
+- acc_50ep: 92.68
+Arquitectura 2:
+- arch_str: |nor_conv_3x3~0|+|nor_conv_1x1~0|nor_conv_1x1~1|+|nor_conv_3x3~0|none~1|nor_conv_3x3~2|
+- channels: 64
+- num_cells: 9
+- parámetros: 1077.45
+- acc_50ep: 92.55
+Arquitectura 3:
+- arch_str: |nor_conv_3x3~0|+|nor_conv_3x3~0|avg_pool_3x3~1|+|none~0|none~1|nor_conv_3x3~2|
+- channels: 64
+- num_cells: 9
+- parámetros: 1001.418
+- acc_50ep: 90.47
+Arquitectura 4:
+- arch_str: |nor_conv_3x3~0|+|nor_conv_1x1~0|nor_conv_3x3~1|+|none~0|none~1|nor_conv_3x3~2|
+- channels: 64
+- num_cells: 7
+- parámetros: 809.034
+- acc_50ep: 92.06
+Arquitectura 5:
+- arch_str: |nor_conv_3x3~0|+|nor_conv_3x3~0|avg_pool_3x3~1|+|none~0|none~1|avg_pool_3x3~2|
+- channels: 64
+- num_cells: 9
+- parámetros: 668.49
+- acc_50ep: 85.83
+
+------------------------------------------------------------
+FASE 2: 2 ARQUITECTURAS X 200 ÉPOCAS
+------------------------------------------------------------
+
+Arquitectura final 1:
+- arch_str: |nor_conv_3x3~0|+|nor_conv_3x3~0|nor_conv_3x3~1|+|nor_conv_3x3~0|avg_pool_3x3~1|nor_conv_3x3~2|
+- channels: 64
+- num_cells: 9
+- parámetros: 1667.274
+- mejor accuracy: 94.12
+- accuracy de la época 200: 94.09
+- época de la mejor accuracy: 192
+- modelo guardado: C64_nc9_acc94.12.pt
+
+Arquitectura final 2:
+- arch_str: |nor_conv_3x3~0|+|nor_conv_1x1~0|nor_conv_1x1~1|+|nor_conv_3x3~0|none~1|nor_conv_3x3~2|
+- channels: 64
+- num_cells: 9
+- parámetros: 1077.45
+- mejor accuracy: 94.18
+- accuracy de la época 200: 93.94
+- época de la mejor accuracy: 188
+- modelo guardado: C64_nc9_acc94.18.pt
+
+Fecha y hora de finalización: 2026-07-14 04:11:18
+Tiempo total de ejecución: 38377.37 segundos
