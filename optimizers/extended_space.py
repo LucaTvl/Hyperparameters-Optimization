@@ -11,8 +11,8 @@ except ImportError:
 from config.settings import CSV_ZCP_EXT, CHANNELS, NUM_CELLS, SAMPLE_PER_GROUP, MASTER_SEED, ZCP_COLS
 from models.zcp_metrics import compute_zcps_ext
 from models.networks import count_params_k
-from optimizers.genetic_ops import random_ind_ext, crossover_ext, mutate_ext, tournament, random_weights, blx_crossover, mutate_gaussian
-from optimizers.ga_level1 import weights_to_dict
+from optimizers.genetic_ops import random_ind_ext, crossover_ext, mutate_ext
+from optimizers.ga_level1 import run_ga_level1, weights_to_dict
 from optimizers.ga_level2 import genes_to_arch_str
 from optimizers.nsga2 import fast_non_dominated_sort, nsga2_select
 
@@ -54,38 +54,16 @@ def get_extended_zcps(df_base, x_batch, y_batch):
 
 def recalibrate_ga1(df_calib_renorm):
     print('\nRe-optimizando GA Nivel 1 con nueva normalización...')
-    
-    def fitness_weights_renorm(w):
-        score = sum(w[i] * df_calib_renorm[f'{col}_norm'] for i, col in enumerate(ZCP_COLS))
-        rank_proxy = score.rank(ascending=False, method='min')
-        top_real = set(df_calib_renorm.nsmallest(50, 'rank_real')['arch_id'])
-        top_proxy = set(df_calib_renorm[rank_proxy <= 50]['arch_id'])
-        return len(top_real & top_proxy) / 50
-
     results_ga1_ext = []
     
     pbar_runs = tqdm(range(10), desc="GA1 Extendido (10 runs)")
     for run in pbar_runs:
-        random.seed(MASTER_SEED + run * 17)
-        pop = [random_weights(len(ZCP_COLS)) for _ in range(20)]
-        fits = [fitness_weights_renorm(ind) for ind in pop]
-
-        for gen in range(5):
-            sorted_idx = sorted(range(len(pop)), key=lambda i: fits[i], reverse=True)
-            new_pop = [pop[i][:] for i in sorted_idx[:2]]
-            while len(new_pop) < 20:
-                p1 = tournament(pop, fits)
-                p2 = tournament(pop, fits)
-                c = blx_crossover(p1, p2) if random.random()<0.8 else p1[:]
-                if random.random() < 0.3:
-                    c = mutate_gaussian(c, 0.15)
-                new_pop.append(c)
-            pop = new_pop
-            fits = [fitness_weights_renorm(ind) for ind in pop]
-
-        best_idx = max(range(len(pop)), key=lambda i: fits[i])
-        results_ga1_ext.append({'best_p50': fits[best_idx], 'weights' : pop[best_idx]})
-        pbar_runs.set_postfix(best_p50=f"{fits[best_idx]:.4f}")
+        best_w, best_f, _ = run_ga_level1(
+            df_calib_renorm, pop_size=20, n_gen=5, p_cross=0.8, p_mut=0.3,
+            elite_k=2, sigma=0.15, k_precision=50, seed=MASTER_SEED + run * 17, cols=ZCP_COLS
+        )
+        results_ga1_ext.append({'best_p50': best_f, 'weights' : best_w})
+        pbar_runs.set_postfix(best_p50=f"{best_f:.4f}")
 
     best_run_ext = max(results_ga1_ext, key=lambda r: r['best_p50'])
     return weights_to_dict(best_run_ext['weights'])
@@ -104,14 +82,20 @@ def compute_fitness_ext(arch_str, C, num_cells, norm_params_ext, best_weights_ex
         score += best_weights_ext[col] * val_norm
 
     params = count_params_k(arch_str, C, num_cells)
-    p_norm = np.clip(
-        (params * norm_params_ext['params_k']['sign'] - norm_params_ext['params_k']['min']) / 
-        (norm_params_ext['params_k']['max'] - norm_params_ext['params_k']['min'] + 1e-8), 0, 1
-    )
-    score += best_weights_ext.get('params_k', 0.0) * p_norm  # Asumiendo params_k podria estar o no
+    # params_k NO forma parte del proxy ponderado, se devuelve como objetivo separado para NSGA-II
     return score, params
 
 def run_nsga2_extended(norm_params_ext, best_weights_ext, x_batch, y_batch, df_base, pop_size=60, n_gen=30, seed=700):
+    """
+    NSGA-II en Espacio Extendido.
+    
+    Conceptos de la Extensión:
+    - Individuo / Cromosoma Extendido: Contiene 8 genes en total.
+      - 6 genes para operaciones (topología interna de la celda).
+      - 1 gen para cantidad de canales (ej. 8, 16, 32).
+      - 1 gen para cantidad de celdas (ej. 3, 5, 7, 9).
+    - Esto permite buscar arquitecturas de diferente tamaño además de diferente forma.
+    """
     print('\nEjecutando NSGA-II en espacio extendido...')
     random.seed(seed)
     

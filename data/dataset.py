@@ -1,7 +1,13 @@
 import torch
 import torchvision
 import torchvision.transforms as T
+import warnings
+import numpy as np
+
 from config.settings import CIFAR_DIR, DEVICE
+
+# Suprimir warning deprecado de numpy al cargar CIFAR en torchvision
+warnings.filterwarnings("ignore", category=np.exceptions.VisibleDeprecationWarning)
 
 def get_cifar10_batch(batch_size=64):
     """

@@ -9,6 +9,10 @@ except ImportError:
     from tqdm import tqdm
 
 def dominates(a, b):
+    """
+    Verifica si la solución 'a' domina según Pareto a la solución 'b'.
+    Asume que el Objetivo 1 (a[0]) se debe MAXIMIZAR y el Objetivo 2 (a[1]) se debe MINIMIZAR.
+    """
     return (a[0] >= b[0] and a[1] <= b[1] and (a[0] > b[0] or a[1] < b[1]))
 
 def fast_non_dominated_sort(pop, scores):
@@ -40,6 +44,10 @@ def fast_non_dominated_sort(pop, scores):
     return fronts[:-1]
 
 def crowding_distance(scores, front):
+    """
+    Calcula la distancia de hacinamiento (Crowding Distance) para mantener diversidad.
+    Asigna np.inf a las soluciones extremas para preservarlas siempre.
+    """
     if len(front) <= 2:
         return [np.inf] * len(front)
     dists = [0.0] * len(front)
@@ -71,6 +79,20 @@ def nsga2_select(pop, scores, pop_size):
     return new_pop, new_scores
 
 def run_nsga2(proxy_lookup, pop_size=80, n_gen=40, p_mut=0.2, p_cross=0.8, seed=42):
+    """
+    NSGA-II: Algoritmo Evolutivo Multiobjetivo.
+    No es un GA clásico, sino que busca un conjunto de soluciones (Frontera de Pareto).
+    
+    Conceptos Evolutivos:
+    - Individuo: Una arquitectura neuronal candidata (cromosoma discreto de 6 genes).
+    - Población: Conjunto de individuos evolucionando simultáneamente.
+    - Objetivo 1: Maximizar el proxy calibrado ('proxy_ga').
+    - Objetivo 2: Minimizar la complejidad, medida en cantidad de parámetros ('params_k').
+    - Dominancia de Pareto: Una solución es mejor si mejora en un objetivo sin empeorar el otro.
+    - Frentes no dominados: Clasificación de la población según niveles de dominancia (rankings).
+    - Distancia de hacinamiento: Métrica para favorecer zonas menos exploradas del frente de Pareto.
+    - Selección: Torneo binario basado en el ranking del frente y, en caso de empate, en la crowding distance.
+    """
     random.seed(seed); np.random.seed(seed)
     pop = [random_ind() for _ in range(pop_size)]
     

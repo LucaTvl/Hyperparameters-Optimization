@@ -1,7 +1,8 @@
 import random
 import numpy as np
 from config.settings import OPS_LIST
-from optimizers.genetic_ops import random_ind, tournament, one_point_crossover, mutate
+from optimizers.genetic_ops import random_ind, one_point_crossover, mutate
+from optimizers.ag_core import IndividuoAG, PoblacionAG, TorneoAG, ElitismoAG, OperadoresAG, AlgoritmoGeneticoAG
 try:
     from tqdm.auto import tqdm
 except ImportError:
@@ -34,57 +35,88 @@ def get_proxy_score(genes, proxy_lookup):
 
 def run_ga_level2(proxy_lookup, pop_size=50, n_gen=30, p_mut=0.2, p_cross=0.8, elite_k=3, seed=42):
     """
-    GA Nivel 2: Búsqueda de arquitectura discreta utilizando el proxy como fitness.
+    GA Nivel 2: Algoritmo Genético Discreto para búsqueda de arquitecturas neuronales.
+    
+    Conceptos Evolutivos:
+    - Individuo: Una arquitectura neuronal candidata.
+    - Cromosoma: Lista de 6 genes categóricos/enteros. Cada gen representa una operación en la celda.
+    - Fitness: Puntuación del proxy calibrado. (No es la accuracy real, sino una estimación rápida).
+    - Accuracy Real: Se usa solo para registrar o comparar resultados al final, no guía la evolución.
+    - Selección: Torneo determinístico.
+    - Cruce: De un punto (One-Point Crossover).
+    - Mutación: Aleatoria discreta (altera un gen por otra operación permitida).
+    - Elitismo: Se conservan los 'elite_k' mejores individuos.
+    - Caché: Se almacenan las evaluaciones previas para no recalcular arquitecturas ya vistas.
     """
     random.seed(seed)
-    pop = [random_ind() for _ in range(pop_size)]
-    fits = [get_proxy_score(ind, proxy_lookup) for ind in pop]
-    cache = {tuple(ind): f for ind, f in zip(pop, fits)}
-
-    history = []
-    n_evals = pop_size
-
-    pbar = tqdm(range(n_gen), desc=f"GA Nivel 2 (seed={seed})", leave=False)
-    for gen in pbar:
-        best_f = max(fits)
-        best_i = np.argmax(fits)
-        astr = genes_to_arch_str(pop[best_i])
+    
+    # 1. Inicialización de la población
+    individuos_iniciales = [IndividuoAG(random_ind()) for _ in range(pop_size)]
+    poblacion = PoblacionAG(individuos_iniciales)
+    
+    # 2. Evaluación inicial usando el caché
+    cache = {}
+    evals_tracker = {'n_evals': 0}
+    
+    def fitness_fn(genes):
+        k = tuple(genes)
+        if k not in cache:
+            cache[k] = get_proxy_score(genes, proxy_lookup)
+            evals_tracker['n_evals'] += 1
+        return cache[k]
+        
+    seleccion = TorneoAG(k=3)
+    elitismo = ElitismoAG(cantidad_elite=elite_k)
+    
+    def mutacion_fn(g):
+        return mutate(g, p_mut)
+        
+    def cruce_fn(g1, g2):
+        if random.random() < p_cross:
+            return one_point_crossover(g1, g2)
+        return (g1[:], g2[:])
+        
+    operadores = OperadoresAG(fn_cruce=cruce_fn, fn_mutacion=mutacion_fn)
+    
+    ag = AlgoritmoGeneticoAG(poblacion, seleccion, operadores, elitismo, fitness_fn)
+    
+    history_compat = []
+    
+    def callback(gen, pob, mets):
+        # En el codigo viejo, gen 0 era la primera evaluacion post-generacion.
+        # Aqui callback(-1) es pre-generacion. Lo ignoramos para mantener compatibilidad 
+        # o lo ajustamos si es necesario. El viejo history trackeaba durante el bucle.
+        if gen == -1: return
+        
+        best_f = mets['mejor_fitness']
+        mejores = pob.obtener_mejores(1)
+        astr = genes_to_arch_str(mejores[0].genes)
         info = proxy_lookup.get(astr, {})
-        history.append({
+        history_compat.append({
             'gen'      : gen,
             'best_fit' : best_f,
-            'mean_fit' : np.mean(fits),
-            'n_evals'  : n_evals,
+            'mean_fit' : mets['promedio'],
+            'n_evals'  : evals_tracker['n_evals'],
             'rank_real': info.get('rank_real', np.nan),
             'acc_valid': info.get('acc_valid', np.nan),
         })
 
-        sorted_idx = np.argsort(fits)[::-1]
-        new_pop = [pop[i][:] for i in sorted_idx[:elite_k]]
+    pbar = tqdm(total=n_gen, desc=f"GA Nivel 2 (seed={seed})", leave=False)
+    
+    def callback_pbar(gen, pob, mets):
+        callback(gen, pob, mets)
+        pbar.set_postfix(best_fit=f"{mets['mejor_fitness']:.4f}")
 
-        while len(new_pop) < pop_size:
-            p1 = tournament(pop, fits)
-            p2 = tournament(pop, fits)
-            c1, c2 = one_point_crossover(p1, p2) if random.random() < p_cross else (p1[:], p2[:])
-            new_pop.append(mutate(c1, p_mut))
-            if len(new_pop) < pop_size:
-                new_pop.append(mutate(c2, p_mut))
+    poblacion_final = ag.ejecutar(n_gen, pbar=pbar, callback=callback_pbar)
+    pbar.close()
 
-        pop = new_pop
-        new_fits = []
-        for ind in pop:
-            k = tuple(ind)
-            if k not in cache:
-                cache[k] = get_proxy_score(ind, proxy_lookup)
-                n_evals += 1
-            new_fits.append(cache[k])
-        fits = new_fits
-        pbar.set_postfix(best_fit=f"{max(fits):.4f}")
-
-    best_idx = np.argmax(fits)
-    best_astr = genes_to_arch_str(pop[best_idx])
+    mejores = poblacion_final.obtener_mejores(1)
+    best_ind = mejores[0].genes
+    best_fit = mejores[0].fitness
+    best_astr = genes_to_arch_str(best_ind)
     best_info = proxy_lookup.get(best_astr, {})
-    return pop[best_idx], fits[best_idx], history, best_info, n_evals
+    
+    return best_ind, best_fit, history_compat, best_info, evals_tracker['n_evals']
 
 def run_rs_level2(proxy_lookup, n_evals=1500, seed=42):
     random.seed(seed)
