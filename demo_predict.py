@@ -29,6 +29,7 @@ def main():
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument("--idx", type=int, help="Índice de la imagen en el test set")
     group.add_argument("--random", action="store_true", help="Elegir una imagen aleatoria")
+    group.add_argument("--image", type=str, help="Ruta a una imagen local externa (.jpg, .png, etc.)")
     group.add_argument("--eval-n", type=int, help="Evaluar N imágenes del test set")
     group.add_argument("--eval-all", action="store_true", help="Evaluar todo el test set")
     
@@ -70,6 +71,77 @@ def main():
 
     mean = (0.4914, 0.4822, 0.4465)
     std = (0.2470, 0.2435, 0.2616)
+
+    # Modo predicción con imagen externa
+    if args.image is not None:
+        if not os.path.exists(args.image):
+            print(f"Error: El archivo de imagen '{args.image}' no existe.")
+            sys.exit(1)
+            
+        print(f"Cargando e infiriendo imagen externa: {args.image}")
+        from PIL import Image
+        try:
+            raw_img = Image.open(args.image).convert("RGB")
+        except Exception as e:
+            print(f"Error al abrir la imagen '{args.image}': {e}")
+            sys.exit(1)
+
+        transform_custom = transforms.Compose([
+            transforms.Resize((32, 32)),
+            transforms.ToTensor(),
+            transforms.Normalize(mean, std),
+        ])
+        
+        image_tensor = transform_custom(raw_img)
+        
+        with torch.no_grad():
+            input_tensor = image_tensor.unsqueeze(0).to(DEVICE)
+            outputs, _ = net(input_tensor)
+            
+            probs = torch.nn.functional.softmax(outputs[0], dim=0)
+            top3_prob, top3_idx = torch.topk(probs, 3)
+            
+            predicted_idx = top3_idx[0].item()
+            confidence = top3_prob[0].item() * 100
+
+        predicted_class = CLASSES[predicted_idx]
+        print(f"\nPredicción principal: {predicted_class}")
+        print(f"Confianza: {confidence:.2f}%")
+        
+        print("\nTop 3 clases con mayor probabilidad:")
+        for i in range(3):
+            cls_name = CLASSES[top3_idx[i].item()]
+            prob = top3_prob[i].item() * 100
+            print(f"  {i+1}. {cls_name}: {prob:.2f}%")
+
+        img_unnorm = image_tensor.clone()
+        for t, m, s in zip(img_unnorm, mean, std):
+            t.mul_(s).add_(m)
+        img_unnorm = torch.clamp(img_unnorm, 0, 1)
+        
+        img_np = img_unnorm.numpy().transpose(1, 2, 0)
+        
+        model_name = os.path.splitext(os.path.basename(args.model))[0]
+        preds_dir = os.path.join("predictions", model_name)
+        os.makedirs(preds_dir, exist_ok=True)
+        
+        fig, axes = plt.subplots(1, 2, figsize=(8, 4))
+        axes[0].imshow(raw_img)
+        axes[0].set_title("Imagen Original")
+        axes[0].axis("off")
+        
+        axes[1].imshow(img_np)
+        axes[1].set_title(f"Redimensionada (32x32)\nPredicción: {predicted_class} ({confidence:.1f}%)")
+        axes[1].axis("off")
+        
+        timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")
+        save_path = os.path.join(preds_dir, f"custom_pred_{timestamp_str}.png")
+        plt.tight_layout()
+        plt.savefig(save_path, bbox_inches='tight')
+        plt.close()
+        
+        print(f"\nVisualización guardada como '{save_path}'")
+        return
     
     transform_test = transforms.Compose([
         transforms.ToTensor(),
