@@ -125,7 +125,10 @@ def main():
         preds_dir = os.path.join("predictions", model_name)
         os.makedirs(preds_dir, exist_ok=True)
         
-        fig, axes = plt.subplots(1, 2, figsize=(8, 4))
+        top3_classes = [CLASSES[top3_idx[i].item()] for i in range(3)]
+        top3_percentages = [top3_prob[i].item() * 100 for i in range(3)]
+
+        fig, axes = plt.subplots(1, 3, figsize=(12, 4))
         axes[0].imshow(raw_img)
         axes[0].set_title("Imagen Original")
         axes[0].axis("off")
@@ -133,6 +136,24 @@ def main():
         axes[1].imshow(img_np)
         axes[1].set_title(f"Redimensionada (32x32)\nPredicción: {predicted_class} ({confidence:.1f}%)")
         axes[1].axis("off")
+        
+        # Gráfico con las 3 clases con mayor probabilidad
+        y_pos = range(3)
+        bars = axes[2].barh(y_pos, top3_percentages, color="#3498db", edgecolor="#21618c", height=0.5)
+        bars[0].set_color("#27ae60")  # Resaltar clase ganadora en verde
+        axes[2].set_yticks(y_pos)
+        axes[2].set_yticklabels(top3_classes, fontsize=10)
+        axes[2].invert_yaxis()
+        max_xlim = max(100.0, max(top3_percentages) * 1.15) if max(top3_percentages) > 0 else 100.0
+        axes[2].set_xlim(0, max_xlim)
+        axes[2].set_xlabel("Probabilidad (%)", fontsize=10)
+        axes[2].set_title("Top 3 Clases Más Probables", fontsize=11)
+        axes[2].grid(axis="x", linestyle="--", alpha=0.5)
+
+        for bar in bars:
+            w = bar.get_width()
+            axes[2].text(w + 1.0, bar.get_y() + bar.get_height() / 2, f"{w:.1f}%",
+                         ha="left", va="center", fontsize=9, fontweight="bold")
         
         timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")
         save_path = os.path.join(preds_dir, f"custom_pred_{timestamp_str}.png")
@@ -209,15 +230,36 @@ def main():
         preds_dir = os.path.join("predictions", model_name)
         os.makedirs(preds_dir, exist_ok=True)
         
-        plt.figure(figsize=(4, 4))
-        plt.imshow(img_np)
-        
-        title = f"Real: {real_class} | Predicción: {predicted_class} ({confidence:.1f}%)"
-        plt.title(title)
-        plt.axis("off")
+        top3_classes = [CLASSES[top3_idx[i].item()] for i in range(3)]
+        top3_percentages = [top3_prob[i].item() * 100 for i in range(3)]
+
+        fig, axes = plt.subplots(1, 2, figsize=(8.5, 4))
+        axes[0].imshow(img_np)
+        title = f"Real: {real_class}\nPredicción: {predicted_class} ({confidence:.1f}%)"
+        axes[0].set_title(title)
+        axes[0].axis("off")
+
+        # Gráfico con las 3 clases con mayor probabilidad
+        y_pos = range(3)
+        bars = axes[1].barh(y_pos, top3_percentages, color="#3498db", edgecolor="#21618c", height=0.5)
+        bars[0].set_color("#27ae60")
+        axes[1].set_yticks(y_pos)
+        axes[1].set_yticklabels(top3_classes, fontsize=10)
+        axes[1].invert_yaxis()
+        max_xlim = max(100.0, max(top3_percentages) * 1.15) if max(top3_percentages) > 0 else 100.0
+        axes[1].set_xlim(0, max_xlim)
+        axes[1].set_xlabel("Probabilidad (%)", fontsize=10)
+        axes[1].set_title("Top 3 Clases Más Probables", fontsize=11)
+        axes[1].grid(axis="x", linestyle="--", alpha=0.5)
+
+        for bar in bars:
+            w = bar.get_width()
+            axes[1].text(w + 1.0, bar.get_y() + bar.get_height() / 2, f"{w:.1f}%",
+                         ha="left", va="center", fontsize=9, fontweight="bold")
         
         timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")
         save_path = os.path.join(preds_dir, f"prediction_{idx}_{timestamp_str}.png")
+        plt.tight_layout()
         plt.savefig(save_path, bbox_inches='tight')
         plt.close()
         
