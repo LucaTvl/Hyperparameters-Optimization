@@ -20,7 +20,10 @@ from config.settings import (
 
 # Importaciones de datos y métricas
 from data.dataset import get_cifar10_batch, get_cifar10_loaders
-from data.csv_handler import load_ground_truth, get_normalization_params, apply_normalization, split_calib_val
+from data.csv_handler import (
+    load_ground_truth, load_zcps, load_full_zcps,
+    get_normalization_params, apply_normalization, split_calib_val
+)
 from models.zcp_metrics import compute_all_zcps, compute_zcps_ext
 from models.networks import count_params_k
 
@@ -54,28 +57,8 @@ def main():
     x_batch, y_batch = get_cifar10_batch(batch_size=64)
     print(f'✓ CIFAR-10 batch: {tuple(x_batch.shape)}')
 
-    if os.path.exists(CSV_ZCP_FULL):
-        df_zcp_full = pd.read_csv(CSV_ZCP_FULL)
-        print(f'✓ ZCPs completos cargados: {len(df_zcp_full)} arquitecturas')
-    else:
-        already_done = set()
-        if os.path.exists(CSV_ZCP):
-            df_prev = pd.read_csv(CSV_ZCP)
-            already_done = set(df_prev['arch_id'].tolist())
-        
-        pending = [i for i in range(15625) if i not in already_done]
-        print(f'Computando ZCPs con GPU para {len(pending)} arquitecturas...')
-        new_rows = []
-        for arch_id in tqdm(pending):
-            astr = df.loc[df['arch_id']==arch_id, 'arch_str'].values[0]
-            res  = compute_all_zcps(astr, x_batch, y_batch)
-            if res:
-                res['arch_id'] = arch_id
-                new_rows.append(res)
-        df_new = pd.DataFrame(new_rows)
-        df_zcp_full = pd.concat([pd.read_csv(CSV_ZCP) if os.path.exists(CSV_ZCP) else pd.DataFrame(), df_new], ignore_index=True)
-        df_zcp_full = df_zcp_full.sort_values('arch_id').reset_index(drop=True)
-        df_zcp_full.to_csv(CSV_ZCP_FULL, index=False)
+    # 2. Cargar o generar Zero-Cost Proxies completos
+    df_zcp_full = load_full_zcps(df, x_batch, y_batch)
 
     df_full = df_zcp_full.merge(df[['arch_id','arch_str','acc_valid','params_k','rank_real']], on='arch_id')
     df_full = df_full.merge(df[['arch_id','params_k']], on='arch_id', how='left', suffixes=('','_dup'))

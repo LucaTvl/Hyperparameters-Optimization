@@ -18,6 +18,8 @@ CSV_ZCP_EXT = os.path.join(BASE_DIR, 'nats_zcps_extended.csv')
 CIFAR_DIR = os.path.join(SCRIPT_DIR, 'tmp', 'cifar10')
 
 DATASET, BUDGET = 'cifar10-valid', '200'
+BENCHMARK_SEED = 777
+N_ARCHS = 15625
 
 # ── Generación de Semilla (Reproducibilidad) ──
 MASTER_SEED = random.randint(0, 2**31 - 1)
