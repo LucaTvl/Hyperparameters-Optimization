@@ -32,10 +32,12 @@ def get_cifar10_batch(batch_size=64):
     
     return x_batch, y_batch
 
-def get_cifar10_loaders(train_batch=96, val_batch=256):
+def get_cifar10_loaders(train_batch=96, eval_batch=256, val_size=5000, seed=42):
     """
-    Retorna los DataLoaders completos (entrenamiento y validación) 
-    para CIFAR-10 con augmentación de datos, listos para entrenamiento real.
+    Retorna los DataLoaders separados de entrenamiento, validación y test.
+    - Train (45.000 imgs): train=True con data augmentation.
+    - Val (5.000 imgs): subconjunto de train=True SIN data augmentation.
+    - Test (10.000 imgs): train=False oficial, para evaluación única final.
     """
     transform_train = T.Compose([
         T.RandomCrop(32, padding=4),
@@ -44,16 +46,31 @@ def get_cifar10_loaders(train_batch=96, val_batch=256):
         T.Normalize((0.4914, 0.4822, 0.4465), (0.2470, 0.2435, 0.2616)),
     ])
     
-    transform_test = T.Compose([
+    transform_eval = T.Compose([
         T.ToTensor(),
         T.Normalize((0.4914, 0.4822, 0.4465), (0.2470, 0.2435, 0.2616)),
     ])
 
-    train_set = torchvision.datasets.CIFAR10(
+    # Conjunto de train con y sin aumentación para separar train y validación
+    full_train_augmented = torchvision.datasets.CIFAR10(
         CIFAR_DIR, train=True, download=True, transform=transform_train
     )
-    val_set = torchvision.datasets.CIFAR10(
-        CIFAR_DIR, train=False, download=True, transform=transform_test
+    full_train_clean = torchvision.datasets.CIFAR10(
+        CIFAR_DIR, train=True, download=False, transform=transform_eval
+    )
+
+    # Partición determinista por semilla fija
+    generator = torch.Generator().manual_seed(seed)
+    indices = torch.randperm(len(full_train_augmented), generator=generator).tolist()
+    val_indices = indices[:val_size]
+    train_indices = indices[val_size:]
+
+    train_set = torch.utils.data.Subset(full_train_augmented, train_indices)
+    val_set = torch.utils.data.Subset(full_train_clean, val_indices)
+
+    # Test oficial aislado (10.000 muestras)
+    test_set = torchvision.datasets.CIFAR10(
+        CIFAR_DIR, train=False, download=True, transform=transform_eval
     )
 
     train_loader = torch.utils.data.DataLoader(
@@ -61,8 +78,12 @@ def get_cifar10_loaders(train_batch=96, val_batch=256):
         num_workers=0, pin_memory=True
     )
     val_loader = torch.utils.data.DataLoader(
-        val_set, batch_size=val_batch, shuffle=False,
+        val_set, batch_size=eval_batch, shuffle=False,
+        num_workers=0, pin_memory=True
+    )
+    test_loader = torch.utils.data.DataLoader(
+        test_set, batch_size=eval_batch, shuffle=False,
         num_workers=0, pin_memory=True
     )
     
-    return train_loader, val_loader
+    return train_loader, val_loader, test_loader

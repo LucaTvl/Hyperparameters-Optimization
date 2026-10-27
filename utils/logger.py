@@ -22,6 +22,10 @@ Dispositivo utilizado: {device}
 
 Dataset: {dataset}
 Ruta del dataset: {cifar_dir}
+Partición metodológica:
+  - Entrenamiento: 45.000 imágenes (con RandomCrop y RandomHorizontalFlip)
+  - Validación: 5.000 imágenes (sin aumentación, para selección y mejor checkpoint)
+  - Test: 10.000 imágenes (evaluación única final con mejor checkpoint)
 Archivo de ground truth: {csv_gt}
 Archivo de Zero-Cost Proxies: {csv_zcp}
 Carpeta de gráficos: {graficos_dir}
@@ -64,8 +68,8 @@ NSGA-II:
 - Objetivos: Maximizar proxy_ga, Minimizar params_k
 
 Entrenamiento final:
-- Fase 1: 5 arquitecturas x 50 épocas
-- Fase 2: 2 arquitecturas x 200 épocas
+- Fase 1: 5 arquitecturas x 50 épocas (evaluadas en Validación)
+- Fase 2: 2 arquitecturas x 200 épocas (múltiples semillas, evaluadas en Test al final)
 """
     with open(metadata_file, 'w', encoding='utf-8') as f:
         f.write(metadata_initial)
@@ -90,18 +94,24 @@ def append_ga2_results(metadata_file, mejor_fit_ga2, arch_str_ga2, acc_ga2, para
         f.write(f"Accuracy del benchmark: {acc_ga2}\n")
         f.write(f"Cantidad de parámetros: {param_ga2}\n")
 
-def append_nsga2_results(metadata_file, n_pareto, n_ev_nsga2):
+def append_nsga2_results(metadata_file, n_pareto, n_ev_nsga2, hv_nsga2=None, hv_real=None, hv_rs=None):
     with open(metadata_file, 'a', encoding='utf-8') as f:
         f.write(f"\n------------------------------------------------------------\n")
         f.write(f"RESULTADOS NSGA-II\n")
         f.write(f"------------------------------------------------------------\n\n")
         f.write(f"Cantidad de soluciones del frente de Pareto: {n_pareto}\n")
         f.write(f"Cantidad de evaluaciones: {n_ev_nsga2}\n")
+        if hv_nsga2 is not None:
+            f.write(f"Hipervolumen normalizado (HV NSGA-II): {hv_nsga2:.4f}\n")
+        if hv_real is not None:
+            f.write(f"Hipervolumen normalizado (HV Frente Real): {hv_real:.4f}\n")
+        if hv_rs is not None:
+            f.write(f"Hipervolumen normalizado (HV Random Search): {hv_rs:.4f}\n")
 
 def append_phase1_results(metadata_file, phase1_results):
     with open(metadata_file, 'a', encoding='utf-8') as f:
         f.write(f"\n------------------------------------------------------------\n")
-        f.write(f"FASE 1: 5 ARQUITECTURAS X 50 ÉPOCAS\n")
+        f.write(f"FASE 1: 5 ARQUITECTURAS X 50 ÉPOCAS (VALIDACIÓN)\n")
         f.write(f"------------------------------------------------------------\n\n")
         for i, r in enumerate(phase1_results, 1):
             f.write(f"Arquitectura {i}:\n")
@@ -109,12 +119,12 @@ def append_phase1_results(metadata_file, phase1_results):
             f.write(f"- channels: {r['channel']}\n")
             f.write(f"- num_cells: {r['num_cells']}\n")
             f.write(f"- parámetros: {r['params_k']}\n")
-            f.write(f"- acc_50ep: {r['acc_50ep']}\n")
+            f.write(f"- mejor val_acc (50ep): {r['val_acc_50ep']:.2f}%\n")
 
 def append_phase2_results(metadata_file, final_results, total_time):
     with open(metadata_file, 'a', encoding='utf-8') as f:
         f.write(f"\n------------------------------------------------------------\n")
-        f.write(f"FASE 2: 2 ARQUITECTURAS X 200 ÉPOCAS\n")
+        f.write(f"FASE 2: ENTRENAMIENTO FINAL (TEST EVALUATION)\n")
         f.write(f"------------------------------------------------------------\n\n")
         for i, r in enumerate(final_results, 1):
             f.write(f"Arquitectura final {i}:\n")
@@ -122,11 +132,15 @@ def append_phase2_results(metadata_file, final_results, total_time):
             f.write(f"- channels: {r['channel']}\n")
             f.write(f"- num_cells: {r['num_cells']}\n")
             f.write(f"- parámetros: {r['params_k']}\n")
-            f.write(f"- mejor accuracy: {r['acc_200ep']}\n")
-            f.write(f"- accuracy de la época 200: {r['history_200'][-1]}\n")
-            f.write(f"- época de la mejor accuracy: {int(np.argmax(r['history_200'])) + 1}\n")
-            fname_short = f'C{r["channel"]}_nc{r["num_cells"]}_acc{r["acc_200ep"]:.2f}.pt'
-            f.write(f"- modelo guardado: {fname_short}\n\n")
+            if 'seeds' in r and len(r['seeds']) > 1:
+                f.write(f"- semillas evaluadas: {r['seeds']}\n")
+                f.write(f"- test accuracy por semilla: {[round(x, 2) for x in r['test_accs']]}\n")
+                f.write(f"- test accuracy media: {r['test_acc_mean']:.2f}% ± {r['test_acc_std']:.2f}%\n")
+                f.write(f"- mejor val accuracy media: {r.get('val_acc_mean', 0.0):.2f}%\n")
+            else:
+                f.write(f"- test accuracy: {r.get('test_acc', r.get('acc_200ep', 0.0)):.2f}%\n")
+                f.write(f"- mejor val accuracy: {r.get('best_val_acc', 0.0):.2f}%\n")
+            f.write(f"- modelo guardado: {r.get('model_file', 'pt')}\n\n")
 
         f.write(f"Fecha y hora de finalización: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
         f.write(f"Tiempo total de ejecución: {total_time:.2f} segundos\n")
